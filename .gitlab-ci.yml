@@ -1,0 +1,93 @@
+Deploy_to_dev:
+  stage: deploy
+  script:
+    - 'sh ./mvnw clean tomcat7:deploy -DskipTests=true -Pdev -Dmaven.tomcat.url="$DEV_DEPLOY_URL" -Dtomcat.username="$DEV_DEPLOY_USER" -Dtomcat.password="$DEV_DEPLOY_PASSWORD"'
+  tags:
+    - lxrunner107
+  when: manual
+  only:
+    - tsobmms_production
+  environment:
+    name: Dev
+
+deploy_to_secaudit:
+  stage: deploy
+  script:
+    - 'sh ./mvnw clean tomcat7:deploy -DskipTests=true -Pdev -Dmaven.tomcat.url="$AUDIT211_DEPLOY_URL" -Dtomcat.username="$AUDIT211_DEPLOY_USER" -Dtomcat.password="$AUDIT211_DEPLOY_PASSWORD"'
+  tags:
+    - lxrunner106
+  when: manual
+  only:
+    - tsobmms_production
+  environment:
+    name: secaudit   
+
+deploy_to_demo:
+  stage: deploy
+  script:
+    - 'sh ./mvnw -e clean tomcat7:deploy -DskipTests=true -Pdemo -Dmaven.tomcat.url="$DEMO_DEPLOY_URL" -Dtomcat.username="$DEMO_DEPLOY_USER" -Dtomcat.password="$DEMO_DEPLOY_PASSWORD"'
+  tags:
+    - lxrunner106
+  when: manual
+  only:
+    - tsobmms_production
+  environment:
+    name: Demo
+
+build_to_Qa:
+  stage: deploy
+  script:
+    - echo "Copying war to QA_sftp"
+    - 'sh ./mvnw clean package -DskipTests=true -Pqa'
+    - ls -l target
+    - export BUILD_TIMESTAMP=`date +%F-%H-%M-%S`
+    - export LATEST_DIR=./TGOBMMSQA/latest
+    - export WAR_FILE="TGOBMMS.war_$BUILD_TIMESTAMP"
+    - lftp -e "mkdir -p $LATEST_DIR;ls -l $LATEST_DIR;put -O $LATEST_DIR target/TGOBMMS.war -o $WAR_FILE;rm -f $LATEST_DIR/TGOBMMS-1.0-latest.war;ln -s $WAR_FILE $LATEST_DIR/TGOBMMS-1.0-latest.war;ls -l $LATEST_DIR;bye" $QA_SITE
+    - echo "Copying war to UAT_sftp"
+    - 'sh ./mvnw clean package -DskipTests=true -Puat'
+    - ls -l target
+    - export BUILD_TIMESTAMP=`date +%F-%H-%M-%S`
+    - export LATEST_DIR=./TGOBMMSUAT/latest
+    - export WAR_FILE="TGOBMMS.war_$BUILD_TIMESTAMP"
+    - lftp -e "mkdir -p $LATEST_DIR;ls -l $LATEST_DIR;put -O $LATEST_DIR target/TGOBMMS.war -o $WAR_FILE;rm -f $LATEST_DIR/TGOBMMS-1.0-latest.war;ln -s $WAR_FILE $LATEST_DIR/TGOBMMS-1.0-latest.war;ls -l $LATEST_DIR;bye" $QA_SITE
+    - echo "Copying war to PROD_sftp"
+    - 'sh ./mvnw clean package -DskipTests=true -Pprod'
+    - ls -l target
+    - export BUILD_TIMESTAMP=`date +%F-%H-%M-%S`
+    - export LATEST_DIR=./TGOBMMSPROD/latest
+    - export WAR_FILE="TGOBMMS.war_$BUILD_TIMESTAMP"
+    - lftp -e "mkdir -p $LATEST_DIR;ls -l $LATEST_DIR;put -O $LATEST_DIR target/TGOBMMS.war -o $WAR_FILE;rm -f $LATEST_DIR/TGOBMMS-1.0-latest.war;ln -s $WAR_FILE $LATEST_DIR/TGOBMMS-1.0-latest.war;ls -l $LATEST_DIR;bye" $QA_SITE
+  tags:
+    - lxrunner107
+  when: manual
+  only:
+    - tsobmms_production
+  environment:
+    name: Qa
+
+deploy_to_Uat:
+    stage: deploy
+    tags:
+    - 104runner    
+    when: manual
+    environment:
+        name: uat
+    script:
+    - echo 
+    - export TC_CONTEXT=TSOBMMS
+    - export TC_WAR=$SFTP_UAT4_UPLOAD/latest/TGOBMMS-uat-deployed.war
+    - echo Deploying $TC_CONTEXT to UAT Tomcat
+    - curl -u "$TC_USER_UAT"  "$TC_DEPLOY_UAT/$TC_CONTEXT" -T "$TC_WAR"
+    
+build_to_Prod:
+    stage: deploy
+    tags:
+    - 104runner    
+    when: manual
+    environment:
+        name: prod
+    script:
+    - lftp -e "pwd;ls TGOBMMSPROD/latest;get TGOBMMSPROD/latest/TGOBMMS-prod-deployed.war;bye"  $UAT_SITE
+    - lftp -e "mkdir -p ./TGOBMMSPROD/latest;mput -O ./TGOBMMSPROD/latest TGOBMMS-prod-deployed.war;bye" $PROD_SITE
+    - echo "copyied TGOBMMS.war for final build"
